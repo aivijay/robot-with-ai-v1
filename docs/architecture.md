@@ -50,11 +50,45 @@ Motion Agent ← PID controller ← Movement commands (NO LLM IN PATH for emerge
 
 ## The Key Insight
 
-## The Key Insight
-
 **All AI runs on the laptop. The robot is just a "thin client"** — it captures camera frames, streams them over WiFi, and executes motor commands it receives back. No AI models run on the robot itself.
 
 This dramatically cuts hardware requirements and cost — the robot just needs WiFi + GPIO + camera interface, nothing more.
+
+## MCP Communication Layer
+
+The laptop-to-robot communication uses **MCP (Model Context Protocol)** — OpenClaw agents call robot tools via MCP:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                         LAPTOP                                 │
+│                                                              │
+│   ┌──────────────┐    ┌──────────────────┐   ┌───────────┐  │
+│   │  Ollama      │    │  Robot MCP Server │   │  Vision   │  │
+│   │              │◄───│  (robot_mcp_     │◄──│  Model    │  │
+│   │              │    │   server.py)      │   │           │  │
+│   └──────────────┘    └────────┬───────────┘   └───────────┘  │
+│                               │                               │
+│                    MCP (stdio) │ HTTP                         │
+│                               │                               │
+└───────────────────────────────┼───────────────────────────────┘
+                                │
+                     ┌──────────▼──────────┐
+                     │      ROBOT (Pi)     │
+                     │                      │
+                     │  robot_client.py     │
+                     │  (thin client)      │
+                     │  Camera + Motors     │
+                     └──────────────────────┘
+```
+
+### MCP Tools Exposed
+
+| Tool | Agent | Description |
+|------|-------|-------------|
+| `robot_move` | Motion Agent | Direction + speed control |
+| `robot_camera` | Vision Agent | Capture current frame |
+| `robot_status` | CNS Agent | Connection health |
+| `robot_stop` | Reaction Agent | Emergency motor halt |
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
