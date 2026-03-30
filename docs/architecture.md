@@ -1,5 +1,55 @@
 # Robot with AI v1 — Architecture Overview
 
+## Agent Architecture
+
+The robot is controlled by a multi-agent system running on the laptop. Each agent has a specific responsibility:
+
+### Core Agents
+
+| Agent | Responsibility | Latency | Technology |
+|-------|---------------|---------|------------|
+| **Brain Agent** | LLM decision making, reasoning, planning | Seconds | Ollama (LLM) |
+| **CNS Agent** | Message routing between agents, coordination | Milliseconds | OpenClaw |
+| **Vision Agent** | Frame capture, preprocessing, scene analysis | Hundreds of ms | Vision model (llava/qwen2.5-vl) |
+| **Hearing Agent** | Audio capture, speech recognition (future) | Hundreds of ms | Whisper |
+| **Motion Agent** | Motor control, speed, steering commands | Milliseconds | Classical (PID/IK) |
+| **Reaction Agent** | Fast reflex responses, emergency stop | Microseconds | Reactive code (NO LLM) |
+| **Speaking Agent** | Text-to-speech, verbal responses | Hundreds of ms | Piper TTS |
+
+### Safety-Critical Note: Motion + Reaction must be Classical
+
+LLMs think in seconds, but motors need milliseconds. **Motion Agent** and **Reaction Agent** must use classical control systems — never route through an LLM for safety-critical paths.
+
+```
+Reaction Agent ← Direct signal ← Safety sensors (NO LLM IN PATH)
+Motion Agent ← PID controller ← Movement commands (NO LLM IN PATH for emergency)
+```
+
+### Agent Communication Flow
+
+```
+[Camera] ──frame──► [Vision Agent] ──analysis──► [Brain Agent]
+                                                         │
+                                                         ▼
+[Sensors] ──data──► [CNS Agent] ◄───coordination───► [Brain Agent]
+                │                                            │
+                ▼                                            ▼
+         [Motion Agent] ◄────────commands───────── [Brain Agent]
+                │
+                ▼
+         [Motors via UART/GPIO]
+```
+
+### Future Agents (TBD)
+
+- **Safety Agent** — battery monitoring, temperature limits, current protection
+- **Memory Agent** — learned patterns, maps, object recognition cache
+- **Navigation Agent** — SLAM, path planning, obstacle avoidance
+
+---
+
+## The Key Insight
+
 ## The Key Insight
 
 **All AI runs on the laptop. The robot is just a "thin client"** — it captures camera frames, streams them over WiFi, and executes motor commands it receives back. No AI models run on the robot itself.
