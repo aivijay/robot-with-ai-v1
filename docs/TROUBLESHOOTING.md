@@ -9,7 +9,28 @@ sudo apt update && sudo apt install python3-pip -y
 
 ### Install OpenCV
 ```bash
-pip3 install opencv-python
+pip3 install opencv-python --break-system-packages
+```
+
+### OpenCV missing system libraries
+If you get errors about missing `.so` files (libopenblas, libwebp, libopenjp2, libavcodec, etc.), install all OpenCV dependencies at once:
+```bash
+sudo apt install libopenblas-dev libwebp-dev libopenjp2-7 libavcodec-dev libavformat-dev libswscale-dev libjpeg-dev libtiff-dev libpng-dev -y
+```
+
+### pip install failing with "No space left on device"
+The build process uses /tmp which may be small (tmpfs). Use a larger directory:
+```bash
+mkdir -p ~/tmp && TMPDIR=~/tmp pip3 install <package> --break-system-packages
+```
+
+### av (FFmpeg) package compilation is very slow on Pi Zero
+The `av` package compiles from source and can take 20+ minutes on Pi Zero. Be patient — it's not hung, just slow.
+
+If you want to skip video features and avoid the long build:
+```bash
+TMPDIR=~/tmp pip3 install picamera2 --break-system-packages --no-deps
+pip3 install picamera2 --break-system-packages  # basic without av
 ```
 
 ## Camera Issues
