@@ -1,148 +1,99 @@
 #!/usr/bin/env python3
-"""
-Autonomous driving with floor/cliff detection using rpicam-still + OpenCV
-Robot-with-AI-v1 - Version 1.0
-
-Hardware: Pi Zero W + TB6612FNG + 5MP Camera v2 (OV5647)
-GPIO: AIN1=17, AIN2=27, PWMA=18, BIN1=22, BIN2=24, PWMB=23, STBY=5
-
-Requirements:
-- rpicam-still (libcamera-apps)
-- OpenCV (cv2)
-- RPi.GPIO
-"""
+"""Basic autonomous driving using rpicam-still for capture - with speed control"""
 import subprocess
 import time
 import RPi.GPIO as GPIO
 import cv2
-import numpy as np
-import os
 
-# Motor pins
+# Speed control: 0.0 to 1.0 (0.3-0.5 recommended for careful navigation)
+SPEED = 0.40
+
 STBY = 5
 AIN1, AIN2, PWMA = 17, 27, 18
 BIN1, BIN2, PWMB = 22, 24, 23
+BRIGHTNESS_THRESHOLD = 60
 
-# Detection thresholds
-BRIGHTNESS_THRESHOLD = 40      # Floor mean brightness must be above this
-FLOOR_DARK_THRESHOLD = 15      # Pixel value considered "dark"
-DARK_PIXEL_RATIO = 0.1         # 10% dark pixels = edge/cliff detected
+# PWM frequency (Hz)
+PWM_FREQ = 1000
 
-# Timing
-REVERSE_DURATION = 0.5          # Seconds to reverse when edge detected
-LOOP_DELAY = 0.3               # Seconds between camera checks
+# Global PWM handles
+pwm_a = None
+pwm_b = None
 
-def setup_gpio():
-    """Initialize GPIO pins for motor control"""
+def setup():
+    global pwm_a, pwm_b
     GPIO.setmode(GPIO.BCM)
-    for pin in [STBY, AIN1, AIN2, PWMA, BIN1, BIN2, PWMB]:
+    for pin in [STBY, AIN1, AIN2, BIN1, BIN2]:
         GPIO.setup(pin, GPIO.OUT)
+    GPIO.setup(PWMA, GPIO.OUT)
+    GPIO.setup(PWMB, GPIO.OUT)
     GPIO.output(STBY, GPIO.HIGH)
-    print("GPIO initialized")
+    
+    # Initialize PWM for speed control
+    pwm_a = GPIO.PWM(PWMA, PWM_FREQ)
+    pwm_b = GPIO.PWM(PWMB, PWM_FREQ)
+    pwm_a.start(0)  # start with motors off
+    pwm_b.start(0)
 
 def drive_forward():
-    """Drive both motors forward"""
-    # Motor A (front) - steering
+    # Set direction (both wheels forward)
     GPIO.output(AIN1, GPIO.LOW)
     GPIO.output(AIN2, GPIO.HIGH)
-    # Motor B (rear) - drive
     GPIO.output(BIN1, GPIO.HIGH)
     GPIO.output(BIN2, GPIO.LOW)
-    GPIO.output(PWMA, GPIO.HIGH)
-    GPIO.output(PWMB, GPIO.HIGH)
+    # Set speed via PWM
+    pwm_a.ChangeDutyCycle(SPEED * 100)
+    pwm_b.ChangeDutyCycle(SPEED * 100)
 
 def stop():
-    """Stop both motors"""
-    GPIO.output(PWMA, GPIO.LOW)
-    GPIO.output(PWMB, GPIO.LOW)
+    pwm_a.ChangeDutyCycle(0)
+    pwm_b.ChangeDutyCycle(0)
 
 def reverse():
-    """Reverse for a short duration to escape edges"""
+    # Direction already set in main loop via drive_forward/stop
+    # Just need to set reverse direction
     GPIO.output(BIN1, GPIO.LOW)
     GPIO.output(BIN2, GPIO.HIGH)
-    GPIO.output(PWMB, GPIO.HIGH)
-    time.sleep(REVERSE_DURATION)
+    pwm_b.ChangeDutyCycle(SPEED * 100)
+    time.sleep(0.8)
     stop()
 
 def capture_frame():
-    """Capture a frame using rpicam-still"""
-    try:
-        # Remove old frame
-        subprocess.run(['rm', '-f', '/tmp/floor.jpg'], check=False, capture_output=True)
-        # Capture new frame
-        subprocess.run([
-            'rpicam-still',
-            '-o', '/tmp/floor.jpg',
-            '-t', '200',
-            '--width', '640',
-            '--height', '480',
-            '-n'
-        ], check=True, capture_output=True)
-        # Read image
-        img = cv2.imread('/tmp/floor.jpg')
-        return img
-    except Exception as e:
-        print(f"Capture error: {e}")
-        return None
+    subprocess.run(['rm', '-f', '/tmp/floor.jpg'], check=False)
+    subprocess.run(['rpicam-still', '-o', '/tmp/floor.jpg', '-t', '200', '--width', '640', '--height', '480', '-n'], check=True)
+    img = cv2.imread('/tmp/floor.jpg')
+    return img
 
 def analyze_frame(frame):
-    """Analyze frame for floor/edge detection
-    
-    Returns:
-        floor_mean: Average brightness of floor region
-        dark_ratio: Fraction of floor pixels darker than FLOOR_DARK_THRESHOLD
-    """
     if frame is None:
-        return 0, 1.0  # Treat as edge if capture failed
-    
+        return 255, 255
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape
-    
-    # Bottom 40% of image is the floor
     floor_region = gray[int(h*0.6):, :]
-    floor_mean = floor_region.mean()
-    
-    # Count dark pixels (potential edges/cliffs)
-    dark_pixels = np.sum(floor_region < FLOOR_DARK_THRESHOLD)
-    dark_ratio = dark_pixels / floor_region.size
-    
-    return floor_mean, dark_ratio
+    return floor_region.mean(), floor_region.min()
 
 def main():
-    """Main autonomous driving loop"""
-    print("=" * 50)
-    print("Autonomous Driving - Robot-with-AI-v1")
-    print("=" * 50)
-    print(f"Thresholds: brightness>{BRIGHTNESS_THRESHOLD}, dark_ratio<{DARK_PIXEL_RATIO}")
-    print("Press Ctrl+C to stop")
-    print()
-    
-    setup_gpio()
-    time.sleep(2)  # Give robot time to settle
+    setup()
+    print(f"Autonomous driving started. Speed: {SPEED*100:.0f}%. Press Ctrl+C to stop.")
+    time.sleep(2)
     
     try:
         while True:
             frame = capture_frame()
-            floor_mean, dark_ratio = analyze_frame(frame)
+            brightness, min_pixel = analyze_frame(frame)
+            print(f"Floor brightness: {brightness:.1f}, min: {min_pixel}")
             
-            # Debug output
-            status = "FORWARD" if floor_mean >= BRIGHTNESS_THRESHOLD and dark_ratio <= DARK_PIXEL_RATIO else "REVERSE!"
-            print(f"[{status}] Floor: mean={floor_mean:.1f}, dark_px={dark_ratio*100:.1f}%")
-            
-            # Decision
-            if floor_mean < BRIGHTNESS_THRESHOLD or dark_ratio > DARK_PIXEL_RATIO:
-                print("  -> EDGE/CLIFF DETECTED!")
+            if brightness < BRIGHTNESS_THRESHOLD or min_pixel < 20:
+                print("EDGE/CLIFF DETECTED - reversing!")
                 stop()
                 reverse()
             else:
                 drive_forward()
             
-            time.sleep(LOOP_DELAY)
+            time.sleep(0.5)
             
     except KeyboardInterrupt:
-        print("\n" + "=" * 50)
-        print("Stopping...")
-        print("=" * 50)
+        print("\nStopping...")
         stop()
         GPIO.cleanup()
 
