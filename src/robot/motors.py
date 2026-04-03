@@ -24,18 +24,20 @@ class MotorController:
         """Initialize GPIO pins."""
         if self._initialized:
             return
-            
+        
         GPIO.setmode(GPIO.BCM)
         
         # All motor control pins as outputs
         for pin in [STBY, AIN1, AIN2, PWMA, BIN1, BIN2, PWMB]:
             GPIO.setup(pin, GPIO.OUT)
         
-        # PWM on speed pins
-        self.pwma = GPIO.PWM(PWMA, PWM_FREQ)
-        self.pwmb = GPIO.PWM(PWMB, PWM_FREQ)
-        self.pwma.start(0)
-        self.pwmb.start(0)
+        # PWM on speed pins (only create if not already created)
+        if self.pwma is None:
+            self.pwma = GPIO.PWM(PWMA, PWM_FREQ)
+            self.pwma.start(0)
+        if self.pwmb is None:
+            self.pwmb = GPIO.PWM(PWMB, PWM_FREQ)
+            self.pwmb.start(0)
         
         # Enable motor driver
         GPIO.output(STBY, GPIO.HIGH)
@@ -77,10 +79,15 @@ class MotorController:
     
     def stop(self):
         """Stop both motors immediately."""
-        if not self._initialized:
-            self.setup()
-        self.pwma.ChangeDutyCycle(0)
-        self.pwmb.ChangeDutyCycle(0)
+        if self.pwma and self.pwmb:
+            self.pwma.ChangeDutyCycle(0)
+            self.pwmb.ChangeDutyCycle(0)
+        elif self._initialized:
+            # Fallback: try GPIO directly
+            GPIO.output(AIN1, GPIO.LOW)
+            GPIO.output(AIN2, GPIO.LOW)
+            GPIO.output(BIN1, GPIO.LOW)
+            GPIO.output(BIN2, GPIO.LOW)
         
     def forward(self, speed: float = 0.3):
         """Drive both motors forward."""

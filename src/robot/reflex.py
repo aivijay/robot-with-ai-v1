@@ -133,6 +133,7 @@ class ReflexController:
                     
             elif analysis['status'] == 'caution':
                 # SLOW DOWN - something ahead
+                self.override_active = False  # Clear override on caution
                 if not self.override_active:
                     self.state = ReflexState.CAUTION
                     # Slow to half speed
@@ -146,10 +147,17 @@ class ReflexController:
                 caution_cooldown -= 1
                 if caution_cooldown == 0 and not self.override_active:
                     self.state = ReflexState.NORMAL
-                    self.override_active = False
+                    
+            elif analysis['status'] == 'clear':
+                # Clear - pass through skill speeds
+                self.override_active = False
+                if not self.override_active:
+                    self.state = ReflexState.NORMAL
+                    self.motors.set_speed(*self._skill_speeds)
                     
             else:
                 # Clear - pass through skill speeds
+                self.override_active = False
                 if not self.override_active:
                     self.state = ReflexState.NORMAL
                     self.motors.set_speed(*self._skill_speeds)
@@ -161,7 +169,9 @@ class ReflexController:
             if frame_count % 30 == 0:
                 print(f"[REFLEX] {self.state.value} | action={action} | "
                       f"floor={analysis.get('floor_brightness', 0):.0f} "
-                      f"obs={analysis.get('obstacle_score', 0):.2f}")
+                      f"obs={analysis.get('obstacle_score', 0):.2f} "
+                      f"override={self.override_active} "
+                      f"skill={self._skill_speeds}")
     
     @property
     def fps(self) -> float:

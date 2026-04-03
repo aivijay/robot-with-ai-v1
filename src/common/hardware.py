@@ -10,9 +10,9 @@ BIN1, BIN2, PWMB = 22, 24, 23   # Motor B (drive/rear)
 PWM_FREQ = 1000  # Hz
 
 # Speed settings
-SPEED_SLOW = 0.15      # 15% - obstacle avoidance mode
-SPEED_MEDIUM = 0.30    # 30% - normal driving
-SPEED_FAST = 0.50      # 50% - fast traversal
+SPEED_SLOW = 0.30      # 30% - obstacle avoidance mode
+SPEED_MEDIUM = 0.50    # 50% - normal driving
+SPEED_FAST = 0.70      # 70% - fast traversal
 
 # Camera settings
 CAMERA_WIDTH = 640
@@ -26,7 +26,7 @@ OBSTACLE_THRESHOLD = 0.15   # obstacle score to stop
 
 # Timing
 SKILL_TIMEOUT = 5.0  # seconds before skill considered stuck
-AGENT_THINK_INTERVAL = 2.0  # seconds between LLM thoughts
+AGENT_THINK_INTERVAL = 0.5  # seconds between LLM thoughts - more responsive
 
 @dataclass
 class RobotConfig:

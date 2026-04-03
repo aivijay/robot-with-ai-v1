@@ -66,6 +66,10 @@ class AgentBrain:
         self.last_thought_time = 0
         self.think_interval = config.agent_think_interval
         
+        # Wander state
+        self._wander_active = False
+        self._wander_counter = 0
+        
         # LLM prompt template
         self._system_prompt = self._build_system_prompt()
         
@@ -105,36 +109,32 @@ When you see an object, try to describe and remember it.
         # Don't think too often
         if now - self.last_thought_time < self.think_interval:
             return "wait"
-        self.last_think_time = now
+        self.last_thought_time = now
         
         # Build observation summary
         reflex_state = self.reflex.state.value if self.reflex.state else "unknown"
         reflex_action = self.reflex.last_action
+        floor_brightness = getattr(self.reflex, 'last_floor_brightness', 0)
+        obstacle_ratio = getattr(self.reflex, 'last_obstacle_ratio', 0)
         
-        # Get recent events from memory
-        recent = self.memory.recent_events[-5:] if self.memory.recent_events else []
-        
-        # Determine situation
+        # WANDER MODE: keep moving, explore
         if reflex_state == ReflexState.DANGER.value:
             situation = f"DANGER: reflex took {reflex_action}"
             reasoning = "Danger detected - reflex is handling it"
             action = "wait_for_clear"
         elif reflex_state == ReflexState.CAUTION.value:
-            situation = f"CAUTION: something ahead"
-            reasoning = "Slowing down, watching for obstacles"
-            action = "continue_slow"
+            situation = f"CAUTION: floor={floor_brightness}, obs={obstacle_ratio:.2f}"
+            reasoning = "Something ahead - slow down and turn"
+            action = "wander_turn"
         else:
-            situation = f"CLEAR - exploring"
-            reasoning = "Path is clear, should explore more"
-            action = "explore_forward"
+            situation = f"CLEAR: floor={floor_brightness}, obs={obstacle_ratio:.2f}"
+            reasoning = "Path is clear - keep exploring forward"
+            action = "wander_forward"
             
         # Build prompt for LLM
         prompt = f"""Current situation: {situation}
 Reflex state: {reflex_state}
 Last reflex action: {reflex_action}
-Recent events: {recent}
-Known areas: {[a.name for a in self.memory.areas]}
-Objects seen: {[o.object_type for o in self.memory.objects[-10:]]}
 
 {self._system_prompt}
 
@@ -162,8 +162,34 @@ What should the robot do now? Choose a skill to execute."""
         Returns True if successful, False if failed/stopped.
         """
         try:
-            if action == "explore_forward":
+            if action == "wander_forward":
                 self.state = AgentState.EXPLORING
+                self._wander_counter += 1
+                print(f"[Agent] wander_forward #{self._wander_counter}")
+                # Alternate between forward and slight turns to cover area
+                if self._wander_counter % 3 == 0:
+                    print("[Agent] -> arc right")
+                    self.skills.arc("right", duration=0.8, speed=self.config.speed_slow)
+                elif self._wander_counter % 3 == 1:
+                    print("[Agent] -> arc left")
+                    self.skills.arc("left", duration=0.8, speed=self.config.speed_slow)
+                else:
+                    print("[Agent] -> forward")
+                    self.skills.forward(duration=0.5, speed=self.config.speed_medium)
+                return True
+                
+            elif action == "wander_turn":
+                self.state = AgentState.AVOIDING
+                print("[Agent] wander_turn")
+                # Turn away from obstacle
+                import random
+                direction = "left" if random.random() > 0.5 else "right"
+                self.skills.turn(direction, duration=0.4, speed=self.config.speed_medium)
+                return True
+                
+            elif action == "explore_forward":
+                self.state = AgentState.EXPLORING
+                print("[Agent] explore_forward -> arc right")
                 # Arc slightly left to sweep area
                 self.skills.arc("right", duration=2.0, speed=self.config.speed_medium)
                 self.state = AgentState.IDLE
