@@ -144,10 +144,12 @@ This way power bank charges at full speed (18W+), only the LiPo suffers slow cha
    - More efficient for motors, same runtime
    - Need 2S-capable charger
 
-### Larger Battery Option
-- 10,000mAh at 3.7V won't fit in 1:24 scale (too bulky)
-- 2S/7.4V at same capacity = half the size
-- Not worth pursuing until v2 is proven
+### Larger Battery Option (v2 Upgrade Path)
+- **10,000mAh at 3.7V is feasible** in 1:24 scale — Vijay says there's enough room
+- Current: 4,000mAh/3.7V (already purchased, use for now)
+- Upgrade path: Swap to 10,000mAh if longer runs are needed
+- 2S/7.4V alternative: Double voltage = more efficient for motors, same runtime in smaller package
+- Upgrade note: Larger battery = longer charge time; slow charging setup can accommodate
 
 ---
 
