@@ -10,9 +10,9 @@ BIN1, BIN2, PWMB = 22, 24, 23   # Motor B (drive/rear)
 PWM_FREQ = 1000  # Hz
 
 # Speed settings
-SPEED_SLOW = 0.30      # 30% - obstacle avoidance mode
-SPEED_MEDIUM = 0.50    # 50% - normal driving
-SPEED_FAST = 0.70      # 70% - fast traversal
+SPEED_SLOW = 0.40      # 40% - obstacle avoidance mode
+SPEED_MEDIUM = 0.60    # 60% - normal driving
+SPEED_FAST = 0.80      # 80% - fast traversal
 
 # Camera settings
 CAMERA_WIDTH = 640
