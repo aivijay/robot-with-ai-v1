@@ -80,6 +80,42 @@
 
 ---
 
+## Phase 3.5: LED Control Integration
+
+> **NOTE:** VEVOR 1:24 has 9 built-in LEDs: 1 roof, 6 front, 2 tail. Can control via MOSFET after bypassing stock LED driver.
+
+### LED Wiring (Plan)
+- [ ] Identify LED power circuit (positive wire from stock LED driver)
+- [ ] Cut ground wire (or positive — depends on stock circuit)
+- [ ] Splice MOSFET into LED ground path
+- [ ] Wire MOSFET gate to Pi GPIO (through 10K resistor)
+
+### Parts Needed
+- [ ] N-channel MOSFET (IRL8721 or similar) × 1-2
+- [ ] 10KΩ resistors (one per MOSFET gate)
+- [ ] Flyback diodes (if LEDs have inductive load — unlikely for simple LEDs)
+- [ ] Heat shrink or electrical tape for splices
+
+### GPIO Pin Plan (TBD)
+| LED Group | GPIO Pin | Notes |
+|----------|---------|-------|
+| Front LEDs (6) | TBD | All front lights together |
+| Rear LEDs (2) | TBD | Tail lights |
+| Roof LED (1) | TBD | Optional — special effects? |
+
+### Control Options
+- [ ] Simple ON/OFF (all LEDs together — start simple)
+- [ ] Individual groups (front, rear, roof separate)
+- [ ] PWM dimming (optional — add if LED brightness control wanted)
+
+### Software Support
+- [ ] Add LED control to `common/hardware.py`
+- [ ] Add `set_lights(front=True, rear=True)` function
+- [ ] Integrate into reflex layer: headlights auto-on in dark
+- [ ] Add LED indicators for robot state (green=ok, red=stuck, amber=turning)
+
+---
+
 ## Phase 4: Pi Zero 2W Mounting
 
 ### Mounting Options
@@ -215,6 +251,9 @@ src/
 | 2S LiPo battery | PENDING | Need to source |
 | 5V BEC | PENDING | Need to source |
 | Heat shrink kit | PENDING | From earlier research |
+| N-channel MOSFET (IRL8721) | PENDING | LED control, ~$1-2 |
+| 10KΩ resistors | PENDING | LED gate pull-down |
+| Flyback diodes | PENDING | Optional — likely not needed for LEDs |
 
 ---
 
