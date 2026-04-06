@@ -24,6 +24,9 @@ sys.path.insert(0, project_root)
 
 import time
 import signal
+import json
+import threading
+from pathlib import Path
 
 from src.common.hardware import RobotConfig
 from src.robot import CameraStream, MotorController, ReflexController, SkillLayer
@@ -53,6 +56,10 @@ class RobotAgent:
         self._stuck_threshold = 4  # After 4 blocked forwards, trigger escape
         self._escape_cooldown = 0  # Frames to wait after escape before counting again
         self._last_was_forward = False
+        
+        # Dashboard shared state file
+        self._state_file = Path("/tmp/robot_state.json")
+        self._state_lock = threading.Lock()
         
     def setup(self):
         """Initialize all robot systems."""
@@ -118,10 +125,19 @@ class RobotAgent:
             
             # Agent thinks and acts
             if self.agent:
+                reflex_state = self.reflex.state.value if self.reflex else "unknown"
+                reflex_action = self.reflex.last_action if self.reflex else "none"
+                floor_brightness = getattr(self.reflex, 'last_floor_brightness', 0)
+                obstacle_score = getattr(self.reflex, 'last_obstacle_ratio', 0)
+                
+                # Update dashboard state
+                self._update_dashboard_state(reflex_state, reflex_action, 
+                                           floor_brightness, obstacle_score)
+                
                 observation = {
                     'fps': self.camera.fps if self.camera else 0,
-                    'reflex_state': self.reflex.state.value if self.reflex else "unknown",
-                    'reflex_action': self.reflex.last_action if self.reflex else "none"
+                    'reflex_state': reflex_state,
+                    'reflex_action': reflex_action
                 }
                 
                 # Stuck detection logic
@@ -174,6 +190,23 @@ class RobotAgent:
             time.sleep(0.1)
             
         print("\n[Agent] Run complete.")
+        
+    def _update_dashboard_state(self, reflex_state, reflex_action, floor_brightness, obstacle_score):
+        """Write current state to shared file for dashboard."""
+        state_data = {
+            'reflex_state': reflex_state,
+            'reflex_action': reflex_action,
+            'floor_brightness': floor_brightness,
+            'obstacle_score': obstacle_score,
+            'stuck_counter': self._stuck_counter,
+            'iteration': getattr(self, '_iteration', 0),
+            'timestamp': time.time()
+        }
+        try:
+            with open(self._state_file, 'w') as f:
+                json.dump(state_data, f)
+        except:
+            pass
         
     def _execute_escape(self):
         """
