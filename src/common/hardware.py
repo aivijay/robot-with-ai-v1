@@ -22,7 +22,7 @@ CAMERA_FPS_TARGET = 3  # Realistic fps from MJPEG stream
 # Image analysis thresholds
 BRIGHTNESS_THRESHOLD = 60   # floor brightness
 DARK_PIXEL_THRESHOLD = 8    # % dark pixels to trigger reverse (cliff)
-OBSTACLE_THRESHOLD = 0.15   # obstacle score to stop
+OBSTACLE_THRESHOLD = 0.25   # obstacle score to stop
 
 # Timing
 SKILL_TIMEOUT = 5.0  # seconds before skill considered stuck
