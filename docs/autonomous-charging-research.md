@@ -1,137 +1,200 @@
-# Autonomous Charging Research — Robot with AI v1
+# Autonomous Charging Research — Robot v2
 
-*Created: 2026-04-01*
+*Updated: 2026-04-05*
 
-## Concept Overview
+## Current Status
 
-Add autonomous charging capability to the robot car so it can:
-1. Detect low battery
-2. Navigate to home base
-3. Auto-dock and charge
-4. Resume operation
+**CHARGING ARCHITECTURE DECIDED — Implementation pending chassis arrival**
 
 ---
 
-## Power Architecture
+## Power Architecture (v2 Final)
 
-### Current Setup (v1)
-- **RPi Zero**: Powered by USB power bank (5V)
-- **Motors**: Powered by car's 3.7V LiPo battery via TB6612FNG
-- **Problem**: Two separate batteries, manually recharged
+### Robot Power Budget
+- **Pi Zero 2 W**: 5V/0.5-1A (2.5-5W)
+- **Motors**: 3.7V nominal, stall ~2A per motor
+- **Camera + misc**: 5V/0.2A
 
-### Proposed v2 Architecture
-- **Single power bank** (10000mAh USB-C) powers RPi
-- **Motors** powered by car's 3.7V LiPo
-- OR: Power bank also powers motors via boost converter
-
-### Power Bank Selection
-- **Target size**: ~10 x 7 x 1.5 cm
-- **Capacity**: 10000mAh (realistic in this size)
-- **Runtime estimate**: ~6-7 hours RPi, or 30+ min heavy motor use
-- **Example**: Kuulaa 10000mAh MagSafe Power Bank
-  - Dimensions: 10.4 x 6.8 x 1.45 cm
-  - USB-C output, 5V
-  - Digital display
-  - ~$20-25
+### Battery Setup (v2)
+| Component | Battery | Connector | Notes |
+|-----------|---------|-----------|-------|
+| Pi + Electronics | USB Power Bank (external) | USB-C | 10000mAh, separate circuit |
+| Motors | 3.7V LiPo (4000mAh) | JST PH2.0 | Internal, powers motors via TB6612FNG |
 
 ---
 
-## Auto-Charging Strategies
-
-### Option 1: Wired Magnetic Connector (Easiest)
-- Magnetic charging cable (like MacBook magsafe)
-- Car parks at base, magnets align connector
-- Base has charger → battery
-- **Pros**: Efficient, reliable
-- **Cons**: Requires precise alignment
-
-### Option 2: Wireless Qi Charging (Cooler)
-- Qi receiver coil on car bottom
-- Qi transmitter pad at home base
-- Car parks on pad, coils align inductively
-- **Pros**: No physical connection needed
-- **Cons**: ~70-80% efficiency, alignment critical
-
-### Qi Receiver Options
-
-| Module | Output | Current | Size | Price |
-|--------|--------|---------|------|-------|
-| Adafruit Qi Receiver | 5V | 500mA | Small | $7.50 |
-| JH-QS-RX-V2 | 5V | 2A (10W) | Medium | $5-10 |
-| Ultra-Thin Android Qi | 5V | 500-800mA | Very thin | $5-8 |
-
-**Recommendation**: 2A module for headroom during charging + RPi load
-
-### Option 3: Contact Charging (Simplest)
-- Two metal contacts on car bottom
-- Car drives into dock, contacts touch rails
-- Like Roomba's charging dock
-- **Pros**: Simple, efficient
-- **Cons**: Requires good alignment
-
----
-
-## GPS Navigation Ideas (Future Enhancement)
-
-### Vijay's Vision
-1. **Home base has GPS coordinate**
-2. **Robot knows its GPS position**
-3. **Robot calculates shortest path home**
-4. **Learns routes over time**
-5. **Can go outside and return**
-
-### GPS Module Options
-
-| Module | Type | Accuracy | Cost |
-|--------|------|----------|------|
-| NEO-6M (GPS) | UART | ~2.5m | $10-15 |
-| NEO-8M | UART | ~2.5m | $15-20 |
-| RTK GPS | RTK | ~1-2cm | $100+ |
-
-**For indoor**: GPS doesn't work well indoors. Alternative:
-- **Vision-based** positioning (track landmarks)
-- **IMU dead reckoning** (drifts over time)
-- **Floor markers** (QR codes, lines, RFID)
-
-**For outdoor**: GPS becomes viable
-- NEO-6M is good starter module
-- Requires clear sky view
-
-### Path Planning Ideas
-- **A* or Dijkstra** for shortest path
-- **SLAM** (Simultaneous Localization and Mapping) for learning environment
-- **Beacon-based** navigation (IR/Radio beacons at known positions)
-
----
-
-## Auto-Dock Flow (Proposed)
+## Charging Architecture (Decided)
 
 ```
-1. Battery low detected (voltage threshold)
-2. Get GPS of home base (stored position)
-3. Calculate path to home base
-4. Navigate following path
-5. Detect dock (infrared sensor / camera / bump switch)
-6. Align and dock (using magnets or guide rails)
-7. Start charging
-8. Monitor battery level
-9. When full: resume autonomous operation
+┌─────────────────────────────────────────┐
+│         MAGNETIC DOCK (single point)   │
+│              on robot chassis            │
+└──────────────────┬──────────────────────┘
+                   │ Magnetic connector (self-aligning)
+                   ▼
+        ┌──────────────────┐
+        │  1-to-2 Splitter │
+        │  (USB-C F → 2M)  │
+        └───────┬──────────┘
+                │
+       ┌────────┴────────┐
+       ▼                 ▼
+  ┌─────────┐      ┌──────────────┐
+  │Power Bank│     │ LiPo Charger  │
+  │(USB-C)  │     │ (USB-C →      │
+  │         │     │  JST PH2.0)   │
+  └─────────┘     └──────┬───────┘
+                          ▼
+                   ┌──────────────┐
+                   │ 3.7V LiPo    │
+                   │ 4000mAh      │
+                   │ (motors)     │
+                   └──────────────┘
 ```
 
+### Parts List
+| Item | Approx Cost | Notes |
+|------|-------------|-------|
+| Magnetic USB-C connector (pair) | $5-10 | Male on robot, female on dock cable |
+| USB-C 1-to-2 splitter (passive) | $8-12 | Like the 3-way you found, or simpler 2-way |
+| TP4056 LiPo charger module | $1-2 | Basic, 1A max charge rate |
+| 3.7V/4000mAh LiPo battery | ~$15 | Already have |
+| USB power bank | Already have | Powers Pi Zero |
+
+### Charging Behavior
+- **Slow charging only** — passive splitter limits PD negotiation
+- Both power bank and LiPo fall back to 5V/2A shared
+- Power bank: ~10W fast charge capable, gets ~5W through splitter
+- LiPo: TP4056 maxes at 1A (~5W), charges in ~4-5 hours
+- **Sufficient for overnight docked charging**
+
 ---
 
-## Next Steps
+## Magnetic Dock Design
 
-- [ ] Finalize power bank selection
-- [ ] Choose charging method (wired vs wireless)
-- [ ] Design home base dock
-- [ ] Research GPS modules for outdoor capability
-- [ ] Test low-battery detection
+### Requirements
+1. Single dock point on robot (magnetic self-aligning)
+2. Cable from dock runs to charger / power source
+3. Robot can approach from any angle, magnet pulls it into alignment
+4. Enough strength to hold robot during charging
+
+### Approach
+- **Magnetic "landing pad"** — flat surface with embedded USB-C female or magnetic adapter
+- **Magnet pair** — one on robot body, one on dock — creates "snap" alignment
+- Robot drives onto pad, parks, magnet engages, charging begins
+
+### Implementation
+1. Mount a small **neodymium magnet** on robot chassis bottom/rear
+2. Corresponding **metal plate or magnet** on charging dock
+3. USB-C magnetic adapter cable plugs into dock, magnetic tip on robot side
+4. Alternative: magnetic ring around USB-C connector (MagSafe-like)
+
+### Commercial Options
+- **USB-C Magnetic Adapter** (search "magnetic USB-C adapter 3-pack") — $6-10
+- **MagSafe to USB-C converter** — works with Apple's magnetic ecosystem
 
 ---
 
-## Research Links
+## Why Slow Charging Is Acceptable
 
-- Adafruit Qi Receiver: https://www.adafruit.com/product/1901
-- Qi 2A Receiver Module: https://www.wirelesschargingcoil.com/10w-fast-wireless-charging-receiver-module/
-- LiPoPi (LiPo + Pi power): https://github.com/NeonHorizon/lipopi
+1. **Robot is docked for long periods** — overnight, during work, etc.
+2. **No urgency** — unlike a phone, it doesn't need 0→100% in 30 min
+3. **Simple architecture** — no PD negotiation, no active circuits in splitter
+4. **Proven pattern** — Roomba docks and charges slowly over hours
+
+### Charge Time Estimates
+| Battery | Capacity | Charge Rate | Time |
+|---------|----------|-------------|------|
+| Power bank | 10000mAh | ~5W (splitter) | ~20 hours (!) — too slow |
+| LiPo (motors) | 4000mAh | ~5W (TP4056 @ 1A) | ~4-5 hours |
+
+**NOTE:** Power bank charge time through passive splitter is terrible (~20 hours). Consider:
+- Power bank charges via its own USB-C port (separate, not through splitter)
+- Only LiPo goes through splitter
+
+### Revised Architecture (Better)
+```
+Magnetic Dock
+    │
+    ├── USB-C → Power bank (direct, fast charge)
+    └── USB-C → LiPo charger → 3.7V battery
+```
+
+This way power bank charges at full speed (18W+), only the LiPo suffers slow charge.
+
+**Or simpler:** Just plug power bank directly to charger when needed — power bank isn't the bottleneck for v2 since it powers only the Pi (low consumption).
+
+---
+
+## Future Fast Charging Options
+
+### When Needed (v3+)
+1. **Active power sharing module** (IP2368-based, ~$12)
+   - USB-C PD input, intelligent split
+   - 5A+ charge current possible
+   - Adds complexity and cost
+
+2. **Battery swap station**
+   - Two batteries, one always charging
+   - Robot swaps depleted → charged in seconds
+   - Requires mechanical swap mechanism (door, latch, alignment)
+
+3. **2S LiPo (7.4V) upgrade**
+   - Same physical size as 1S, double voltage
+   - More efficient for motors, same runtime
+   - Need 2S-capable charger
+
+### Larger Battery Option
+- 10,000mAh at 3.7V won't fit in 1:24 scale (too bulky)
+- 2S/7.4V at same capacity = half the size
+- Not worth pursuing until v2 is proven
+
+---
+
+## GPS Navigation (Deferred — Future)
+
+- Indoor: GPS doesn't work, use vision/IMU/floor markers
+- Outdoor: NEO-6M GPS module (~$12)
+- Home base GPS coordinate stored
+- Shortest path calculation
+- Path learning over time
+
+**Not a v2 priority** — focus on getting robot driving first.
+
+---
+
+## Implementation Tasks
+
+### Charging System (v2)
+- [ ] Source magnetic USB-C adapter pair
+- [ ] Source 2-way USB-C splitter (or use power bank direct + LiPo charger)
+- [ ] Mount magnet on robot chassis
+- [ ] Build/buy dock platform
+- [ ] Test alignment and charging
+- [ ] Verify LiPo charges while robot is parked
+
+### Safety
+- [ ] LiPo charging protection (TP4056 has basic protection)
+- [ ] No overcharge — charger board handles this
+- [ ] Thermal monitoring if fast charging later
+
+---
+
+## Old Research (Superseded)
+
+The original autonomous-charging-research.md (April 1) covered:
+- Qi wireless charging options
+- 2S LiPo architecture
+- GPS navigation ideas
+
+Much of that was conceptual. This doc reflects **actual decisions made for v2**.
+
+---
+
+## Reference Links
+
+- TP4056 module: ~$0.50-2 (Amazon, AliExpress)
+- IP2368 fast charger: ~$10-15 (AliExpress)
+- Magnetic USB-C adapter: ~$6-10 (Amazon)
+- USB-C 2-way splitter: ~$8-12 (Amazon)
+- Neodymium magnets: ~$5-10 for a set (Amazon)
